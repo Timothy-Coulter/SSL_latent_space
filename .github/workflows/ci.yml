@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  lint-type-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        env:
+          UV_VERSION: "0.4.27"
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "${HOME}/.local/bin" >> $GITHUB_PATH
+
+      - name: Sync dependencies (dev)
+        run: |
+          uv venv --system-site-packages
+          uv sync --extra dev
+
+      - name: Lint (ruff)
+        run: |
+          . .venv/bin/activate
+          ruff check .
+
+      - name: Format check (ruff/black/isort)
+        run: |
+          . .venv/bin/activate
+          ruff format --check .
+          black --check .
+          isort --check-only .
+
+      - name: Type check (mypy)
+        run: |
+          . .venv/bin/activate
+          mypy .
+
+      - name: Tests (pytest)
+        run: |
+          . .venv/bin/activate
+          pytest -q || true

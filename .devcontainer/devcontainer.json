@@ -1,0 +1,71 @@
+{
+  "$schema": "https://raw.githubusercontent.com/devcontainers/spec/main/schemas/devContainer.schema.json",
+  "name": "PyTorch DevContainer — NGC 25.08",
+  "initializeCommand": "bash -lc 'mkdir -p .devcontainer; if [ -f \"$HOME/.env\" ]; then cp \"$HOME/.env\" .devcontainer/.env.devcontainer; else : > .devcontainer/.env.devcontainer; fi'",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--gpus=all",
+    "--ipc=host",
+    "--init",
+    "--shm-size=16g",
+    "--ulimit",
+    "memlock=-1",
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/.env.devcontainer"
+  ],
+  "containerUser": "vscode",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "forwardPorts": [
+    8888,
+    6006
+  ],
+  "portsAttributes": {
+    "8888": {
+      "label": "Jupyter Lab",
+      "onAutoForward": "openBrowser"
+    },
+    "6006": {
+      "label": "TensorBoard",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "mounts": [
+    // Caches (named volumes for speed & persistence)
+    "type=volume,source=${localWorkspaceFolderBasename}-pip-cache,target=/home/vscode/.cache/pip",
+    "type=volume,source=${localWorkspaceFolderBasename}-uv-cache,target=/home/vscode/.cache/uv",
+    "type=volume,source=${localWorkspaceFolderBasename}-torch-cache,target=/home/vscode/.cache/torch",
+    "type=volume,source=${localWorkspaceFolderBasename}-hf-cache,target=/home/vscode/.cache/huggingface",
+    // Data & datasets (use volumes by default so Clone-in-Container-Volume works)
+    "type=volume,source=${localWorkspaceFolderBasename}-datasets,target=/workspaces/${localWorkspaceFolderBasename}/datasets",
+    "type=volume,source=${localWorkspaceFolderBasename}-data,target=/workspaces/${localWorkspaceFolderBasename}/data"
+  ],
+  "containerEnv": {
+    "NVIDIA_VISIBLE_DEVICES": "all",
+    "NVIDIA_DRIVER_CAPABILITIES": "compute,utility"
+  },
+  "remoteEnv": {
+    "HF_HOME": "/home/vscode/.cache/huggingface",
+    "TORCH_HOME": "/home/vscode/.cache/torch",
+    "PIP_CACHE_DIR": "/home/vscode/.cache/pip",
+    "UV_CACHE_DIR": "/home/vscode/.cache/uv"
+  },
+  "features": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-toolsai.jupyter",
+        "gaogaotiantian.viztracer-vscode",
+        "openai.chatgpt",
+        "RooVeterinaryInc.roo-cline"
+      ]
+    }
+  },
+  "postCreateCommand": "bash -lc 'chmod +x /workspaces/${localWorkspaceFolderBasename}/dev.sh && mkdir -p src tests misc examples docs datasets && uv venv --system-site-packages && uv sync --extra dev'",
+  "postStartCommand": "bash -lc 'if [ -d .venv ]; then . .venv/bin/activate; fi; nohup jupyter lab --ServerApp.token=\"\" --ServerApp.password=\"\" --ip=0.0.0.0 --port=8888 --no-browser > /home/vscode/.jupyter.log 2>&1 & nohup tensorboard --logdir /workspaces/${localWorkspaceFolderBasename}/runs --host=0.0.0.0 --port=6006 > /home/vscode/.tensorboard.log 2>&1 & sleep 1'"
+}

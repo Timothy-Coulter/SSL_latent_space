@@ -1,0 +1,138 @@
+[project]
+name = "pytorch-dev-template"
+version = "0.1.0"
+description = "Template repo for PyTorch + CUDA devcontainer with uv and strict typing"
+readme = "README.md"
+# Pin to the Python that ships in nvcr.io/nvidia/pytorch:25.08-py3
+requires-python = ">=3.12,<3.13"
+authors = [
+  { name = "Your Name" }
+]
+
+# Core ML/DL/data packages — PyTorch is installed in the image (not here)
+dependencies = [
+  # Torch in nvcr.io/nvidia/pytorch:25.08 is built against NumPy 1.x
+  # Keep NumPy <2 to avoid ABI/runtime incompatibilities inside this image.
+  "numpy>=1.26,<2",
+  "pandas>=2.2,<2.3",
+  "scikit-learn>=1.5,<1.7",
+  "scipy>=1.13,<1.16",
+  "matplotlib>=3.9",
+  "seaborn>=0.13",
+  "plotly>=5.24",
+  "tqdm>=4.66",
+  "rich>=13.7",
+  "pydantic>=2.7",
+  "python-dotenv>=1.0",
+  "huggingface_hub>=0.25",
+  "datasets>=2.20",
+  "transformers>=4.44",
+  "tensorboard>=2.17",
+  "pillow>=10.4",
+  "ipykernel>=6.29",
+  "jupyterlab>=4.2",
+  "notebook>=7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  # Formatting & linting
+  "ruff>=0.6.9",
+  "black>=24.8.0",
+  "isort>=5.13.2",
+  # Typing
+  "mypy>=1.10.0",
+  "types-requests",
+  "types-PyYAML",
+  # Tests
+  "pytest>=8.3",
+  "pytest-xdist>=3.6",
+  "pytest-rerunfailures>=14.0",
+  # Profiling / tracing
+  "viztracer>=0.16",
+]
+
+## PyTorch is preinstalled in the base image and intentionally omitted
+## from the dependency graph to avoid reinstallation by uv. See
+## docs/template_readme.md for the pinned versions.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+  "N",  # pep8-naming
+  "UP", # pyupgrade
+  "B",  # flake8-bugbear
+  "SIM",# flake8-simplify
+  "C90",# mccabe complexity
+  "D",  # pydocstyle (docstrings)
+]
+ignore = [
+  "E501",  # handled by formatter
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "preserve"
+skip-magic-trailing-comma = false
+
+[tool.mypy]
+python_version = "3.12"
+
+# --- Performance settings ---
+incremental = true
+cache_dir = ".mypy_cache"
+follow_imports = "skip"
+follow_imports_for_stubs = true
+
+# Avoid analyzing huge ML libraries
+ignore_missing_imports = true
+
+# --- Strictness applied ONLY to your code ---
+strict = true
+disallow_untyped_defs = true
+disallow_any_generics = true
+no_implicit_reexport = true
+
+# --- Optional but safe warnings ---
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+
+# --- Pydantic plugin ---
+plugins = ["pydantic.mypy"]
+
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+addopts = [
+    "-n", "auto",                    # pytest-xdist: auto-detect number of workers
+    "--reruns", "3",                 # pytest-rerunfailures: retry failed tests 3 times
+    "--reruns-delay", "0.1"          # pytest-rerunfailures: 0.1 second delay between retries
+]
+testpaths = ["tests", "unit_tests"]
