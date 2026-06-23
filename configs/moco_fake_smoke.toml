@@ -27,6 +27,15 @@ seed = 0
 device = "cpu"
 log_every_n_steps = 1
 
+[early_stopping]
+enabled = false
+patience = 2
+min_delta = 0.0
+
+[checkpoint]
+save_best = false
+save_final = false
+
 [logging]
 enabled = false
 experiment = "smoke"

@@ -1,6 +1,6 @@
 {
   "algorithm": {
-    "name": "simclr",
+    "name": "byol",
     "queue_size": 4096,
     "momentum": 0.99,
     "temperature": 0.2,
@@ -38,9 +38,18 @@
     "log_every_n_steps": 50,
     "verbose": 1
   },
+  "early_stopping": {
+    "enabled": true,
+    "patience": 10,
+    "min_delta": 0.0
+  },
+  "checkpoint": {
+    "save_best": true,
+    "save_final": true
+  },
   "logging": {
     "enabled": true,
-    "experiment": "simclr_cifar10",
+    "experiment": "byol_cifar10",
     "results_dir": "results",
     "tensorboard_dir": "runs"
   }

@@ -1,7 +1,6 @@
 [algorithm]
-name = "swav"
-swav_num_prototypes = 300
-swav_temperature = 0.1
+name = "byol"
+byol_target_tau = 0.99
 
 [model]
 backbone = "simple_cnn"
@@ -14,9 +13,8 @@ lr = 0.001
 weight_decay = 0.0001
 
 [data]
-dataset = "stl10"
+dataset = "cifar10"
 root = "datasets/data"
-split = "unlabeled"
 download = false
 batch_size = 256
 num_workers = 8
@@ -28,8 +26,17 @@ device = "cuda"
 log_every_n_steps = 50
 verbose = 1
 
+[early_stopping]
+enabled = true
+patience = 10
+min_delta = 0.0
+
+[checkpoint]
+save_best = true
+save_final = true
+
 [logging]
 enabled = true
-experiment = "swav_stl10"
+experiment = "byol_cifar10"
 results_dir = "results"
 tensorboard_dir = "runs"

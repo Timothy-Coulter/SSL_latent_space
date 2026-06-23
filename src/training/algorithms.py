@@ -9,7 +9,7 @@ experiments and as a foundation to extend.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 import torch
 from torch import nn
@@ -454,3 +454,91 @@ def build_algorithm(model: ModelConfig, algo: AlgorithmConfig) -> SSLStep:
     if name == "vicreg":
         return VICReg.build(model, algo)
     raise ValueError(f"Unknown algorithm '{name}'.")
+
+
+def algorithm_state_dict(algo: SSLStep) -> dict[str, Any]:
+    """Serialize an algorithm instance to a plain Python dict."""
+    if isinstance(algo, SimCLR):
+        return {
+            "type": "simclr",
+            "backbone": algo.backbone.state_dict(),
+            "projector": algo.projector.state_dict(),
+        }
+    if isinstance(algo, MoCo):
+        return {
+            "type": "moco",
+            "online_backbone": algo.online_backbone.state_dict(),
+            "online_projector": algo.online_projector.state_dict(),
+            "target_backbone": algo.target_backbone.state_dict(),
+            "target_projector": algo.target_projector.state_dict(),
+            "queue": algo.queue.detach().cpu(),
+            "queue_ptr": algo.queue_ptr.detach().cpu(),
+        }
+    if isinstance(algo, BYOL):
+        return {
+            "type": "byol",
+            "online_backbone": algo.online_backbone.state_dict(),
+            "online_projector": algo.online_projector.state_dict(),
+            "predictor": algo.predictor.state_dict(),
+            "target_backbone": algo.target_backbone.state_dict(),
+            "target_projector": algo.target_projector.state_dict(),
+        }
+    if isinstance(algo, SwAV):
+        return {
+            "type": "swav",
+            "backbone": algo.backbone.state_dict(),
+            "projector": algo.projector.state_dict(),
+            "prototypes": algo.prototypes.state_dict(),
+        }
+    if isinstance(algo, VICReg):
+        return {
+            "type": "vicreg",
+            "backbone": algo.backbone.state_dict(),
+            "projector": algo.projector.state_dict(),
+        }
+    raise TypeError(f"Unsupported algorithm type: {type(algo)!r}")
+
+
+def load_algorithm_state_dict(algo: SSLStep, state: dict[str, Any]) -> None:
+    """Load a serialized state dict (from `algorithm_state_dict`)."""
+    algo_type = state.get("type")
+    if isinstance(algo, SimCLR) and algo_type == "simclr":
+        algo.backbone.load_state_dict(state["backbone"])
+        algo.projector.load_state_dict(state["projector"])
+        return
+    if isinstance(algo, MoCo) and algo_type == "moco":
+        algo.online_backbone.load_state_dict(state["online_backbone"])
+        algo.online_projector.load_state_dict(state["online_projector"])
+        algo.target_backbone.load_state_dict(state["target_backbone"])
+        algo.target_projector.load_state_dict(state["target_projector"])
+        algo.queue.copy_(state["queue"].to(algo.queue.device))
+        algo.queue_ptr.copy_(state["queue_ptr"].to(algo.queue_ptr.device))
+        return
+    if isinstance(algo, BYOL) and algo_type == "byol":
+        algo.online_backbone.load_state_dict(state["online_backbone"])
+        algo.online_projector.load_state_dict(state["online_projector"])
+        algo.predictor.load_state_dict(state["predictor"])
+        algo.target_backbone.load_state_dict(state["target_backbone"])
+        algo.target_projector.load_state_dict(state["target_projector"])
+        return
+    if isinstance(algo, SwAV) and algo_type == "swav":
+        algo.backbone.load_state_dict(state["backbone"])
+        algo.projector.load_state_dict(state["projector"])
+        algo.prototypes.load_state_dict(state["prototypes"])
+        return
+    if isinstance(algo, VICReg) and algo_type == "vicreg":
+        algo.backbone.load_state_dict(state["backbone"])
+        algo.projector.load_state_dict(state["projector"])
+        return
+    raise ValueError(
+        f"Checkpoint algorithm mismatch: checkpoint={algo_type!r} model={type(algo)!r}"
+    )
+
+
+def get_backbone(algo: SSLStep) -> nn.Module:
+    """Return the backbone module for an algorithm instance."""
+    if isinstance(algo, (SimCLR, SwAV, VICReg)):
+        return algo.backbone
+    if isinstance(algo, (MoCo, BYOL)):
+        return algo.online_backbone
+    raise TypeError(f"Unsupported algorithm type: {type(algo)!r}")

@@ -69,7 +69,14 @@ def test_train_all_dataset_algorithm_combinations_smoke(
         {
             "algorithm": algo_cfg,
             "data": data_cfg,
-            "loop": {"epochs": 1, "steps_per_epoch": 1, "device": "cpu", "log_every_n_steps": 1},
+            "loop": {
+                "epochs": 1,
+                "steps_per_epoch": 1,
+                "device": "cpu",
+                "log_every_n_steps": 1,
+            },
+            "early_stopping": {"enabled": False},
+            "checkpoint": {"save_best": False, "save_final": True},
             "logging": {
                 "enabled": False,
                 "results_dir": str(tmp_path),

@@ -31,7 +31,14 @@ def test_real_data_cpu_smoke(tmp_path: Path) -> None:
                 "batch_size": 32,
                 "num_workers": 0,
             },
-            "loop": {"epochs": 1, "steps_per_epoch": 1, "device": "cpu", "log_every_n_steps": 1},
+            "loop": {
+                "epochs": 1,
+                "steps_per_epoch": 1,
+                "device": "cpu",
+                "log_every_n_steps": 1,
+            },
+            "early_stopping": {"enabled": False},
+            "checkpoint": {"save_best": False, "save_final": True},
             "logging": {
                 "enabled": False,
                 "results_dir": str(tmp_path),
@@ -69,6 +76,8 @@ def test_real_data_gpu_smoke_if_available(tmp_path: Path) -> None:
                 "device": "cuda",
                 "log_every_n_steps": 1,
             },
+            "early_stopping": {"enabled": False},
+            "checkpoint": {"save_best": False, "save_final": True},
             "logging": {
                 "enabled": False,
                 "results_dir": str(tmp_path),

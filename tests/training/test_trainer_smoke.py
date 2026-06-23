@@ -14,7 +14,14 @@ def test_train_from_config_creates_run_dir(tmp_path: Path) -> None:
         {
             "algorithm": {"name": "simclr"},
             "data": {"dataset": "fake", "batch_size": 16, "num_workers": 0, "image_size": 32},
-            "loop": {"epochs": 1, "steps_per_epoch": 1, "device": "cpu", "log_every_n_steps": 1},
+            "loop": {
+                "epochs": 1,
+                "steps_per_epoch": 1,
+                "device": "cpu",
+                "log_every_n_steps": 1,
+            },
+            "early_stopping": {"enabled": False},
+            "checkpoint": {"save_best": False, "save_final": True},
             "logging": {
                 "enabled": False,
                 "results_dir": str(tmp_path),

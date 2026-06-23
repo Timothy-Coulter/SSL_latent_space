@@ -46,6 +46,21 @@ class TrainLoopConfig(BaseModel):
     verbose: int = Field(0, ge=0, le=2, description="0=silent, 1=progress, 2=extra")
 
 
+class EarlyStoppingConfig(BaseModel):
+    """Early stopping settings (based on epoch-average train loss)."""
+
+    enabled: bool = False
+    patience: int = Field(10, ge=0, description="Stop after N non-improving epochs.")
+    min_delta: float = Field(0.0, ge=0, description="Minimum improvement to reset patience.")
+
+
+class CheckpointConfig(BaseModel):
+    """Checkpointing settings."""
+
+    save_best: bool = False
+    save_final: bool = True
+
+
 class ModelConfig(BaseModel):
     """Backbone + projection settings."""
 
@@ -95,6 +110,8 @@ class TrainingConfig(BaseModel):
     optim: OptimConfig = Field(default_factory=OptimConfig)
     data: DataConfig = Field(default_factory=DataConfig)
     loop: TrainLoopConfig = Field(default_factory=TrainLoopConfig)
+    early_stopping: EarlyStoppingConfig = Field(default_factory=EarlyStoppingConfig)
+    checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @classmethod
