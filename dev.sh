@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-  usage() {
+usage() {
   cat <<'USAGE'
 dev.sh <command>
 
@@ -29,7 +29,7 @@ if [[ -z "$cmd" ]]; then
   exit 1
 fi
 
-  case "$cmd" in
+case "$cmd" in
   format)
     echo "[format] ruff format, black, isort"
     uv run --with ruff,black,isort ruff format .
@@ -54,7 +54,15 @@ fi
     ;;
   integration-tests)
     echo "[integration-tests] pytest integration_tests (uses pyproject addopts)"
+    set +e
     uv run --with pytest pytest integration_tests
+    status=$?
+    set -e
+    if [[ $status -eq 5 ]]; then
+      echo "[integration-tests] no tests collected (ok)"
+      exit 0
+    fi
+    exit $status
     ;;
   versions)
     echo "[versions] Python, torch, CUDA"
@@ -94,23 +102,20 @@ PY
     "$0" test
     "$0" integration-tests
     ;;
+  gpu-check)
+    echo "[gpu-check] Checking GPU availability"
+    python -c "import torch; print(f'GPU Available: {torch.cuda.is_available()}'); print(f'GPU Count: {torch.cuda.device_count()}'); [print(f'GPU {i}: {torch.cuda.get_device_name(i)}') for i in range(torch.cuda.device_count())]"
+    ;;
+  install)
+    echo "[install] Installing package in editable mode"
+    uv pip install -e .
+    ;;
+  jupyter)
+    echo "[jupyter] Opening Jupyter Lab"
+    open http://localhost:8888
+    ;;
   *)
     usage
     exit 1
     ;;
-
-  gpu-check)
-      echo "[gpu-check] Checking GPU availability"
-      python -c "import torch; print(f'GPU Available: {torch.cuda.is_available()}'); print(f'GPU Count: {torch.cuda.device_count()}'); [print(f'GPU {i}: {torch.cuda.get_device_name(i)}') for i in range(torch.cuda.device_count())]"
-      ;;
-
-  install)
-      echo "[install] Installing package in editable mode"
-      uv pip install -e .
-      ;;
-
-  jupyter)
-      echo "[jupyter] Opening Jupyter Lab"
-      open http://localhost:8888
-      ;;
 esac
