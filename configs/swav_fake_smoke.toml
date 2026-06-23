@@ -1,0 +1,33 @@
+[algorithm]
+name = "swav"
+swav_num_prototypes = 50
+swav_temperature = 0.1
+
+[model]
+backbone = "simple_cnn"
+feature_dim = 128
+hidden_dim = 256
+projection_dim = 128
+
+[optim]
+lr = 0.001
+weight_decay = 0.0001
+
+[data]
+dataset = "fake"
+batch_size = 32
+num_workers = 0
+image_size = 32
+
+[loop]
+epochs = 1
+steps_per_epoch = 2
+seed = 0
+device = "cpu"
+log_every_n_steps = 1
+
+[logging]
+enabled = false
+experiment = "smoke"
+results_dir = "results"
+tensorboard_dir = "runs"

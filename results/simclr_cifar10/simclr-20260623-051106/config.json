@@ -1,0 +1,47 @@
+{
+  "algorithm": {
+    "name": "simclr",
+    "queue_size": 4096,
+    "momentum": 0.99,
+    "temperature": 0.2,
+    "byol_target_tau": 0.99,
+    "swav_num_prototypes": 100,
+    "swav_temperature": 0.1,
+    "vicreg_invariance_weight": 25.0,
+    "vicreg_variance_weight": 25.0,
+    "vicreg_covariance_weight": 1.0
+  },
+  "model": {
+    "backbone": "simple_cnn",
+    "feature_dim": 128,
+    "projection_dim": 128,
+    "hidden_dim": 256
+  },
+  "optim": {
+    "lr": 0.001,
+    "weight_decay": 0.0001
+  },
+  "data": {
+    "dataset": "cifar10",
+    "root": "datasets/data",
+    "split": null,
+    "download": false,
+    "batch_size": 256,
+    "num_workers": 8,
+    "image_size": 32
+  },
+  "loop": {
+    "epochs": 100,
+    "steps_per_epoch": null,
+    "seed": 0,
+    "device": "cuda",
+    "log_every_n_steps": 50,
+    "verbose": 1
+  },
+  "logging": {
+    "enabled": true,
+    "experiment": "simclr_cifar10",
+    "results_dir": "results",
+    "tensorboard_dir": "runs"
+  }
+}
