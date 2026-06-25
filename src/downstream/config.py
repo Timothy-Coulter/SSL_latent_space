@@ -6,14 +6,19 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from src.training.config import AlgorithmName
+
+DownstreamDatasetName = Literal["cifar10", "cifar100", "stl10"]
 
 
 class DownstreamDataConfig(BaseModel):
     """Dataset and dataloader settings for fine-tuning."""
 
-    dataset: str = "cifar10"
+    dataset: DownstreamDatasetName = "cifar10"
     root: str = "datasets/data"
     download: bool = False
     batch_size: int = Field(128, gt=0)
@@ -52,16 +57,57 @@ class DownstreamLoggingConfig(BaseModel):
     save_best_checkpoint: bool = True
 
 
+class PretrainedConfig(BaseModel):
+    """How to initialize the fine-tuning backbone."""
+
+    kind: Literal["best", "path", "none"] = "best"
+    path: str | None = None
+
+    # Used when kind="best".
+    algorithm: AlgorithmName | None = None
+    dataset: DownstreamDatasetName | None = None
+    results_dir: str = "results"
+    experiment: str | None = None
+    checkpoint: Literal["best", "final"] = "best"
+
+
 class FinetuneConfig(BaseModel):
     """Top-level fine-tuning configuration."""
 
-    pretrained_checkpoint: str = Field(..., description="Path to SSL checkpoint (e.g. best.pt).")
+    # Backward compatible: old configs can still use this top-level field.
+    pretrained_checkpoint: str | None = Field(
+        None, description="Deprecated: use [pretrained] instead."
+    )
+    pretrained: PretrainedConfig = Field(default_factory=PretrainedConfig)
+
     num_classes: int = Field(10, gt=1)
+    backbone: str = Field(
+        "simple_cnn", description="Backbone name used when pretrained.kind='none'."
+    )
+    feature_dim: int = Field(
+        128, gt=0, description="Backbone feature dim used when pretrained.kind='none'."
+    )
 
     data: DownstreamDataConfig = Field(default_factory=DownstreamDataConfig)
     loop: DownstreamLoopConfig = Field(default_factory=DownstreamLoopConfig)
     optim: DownstreamOptimConfig = Field(default_factory=DownstreamOptimConfig)
     logging: DownstreamLoggingConfig = Field(default_factory=DownstreamLoggingConfig)
+
+    @model_validator(mode="after")
+    def _backfill_pretrained(self) -> FinetuneConfig:
+        if (
+            self.pretrained_checkpoint
+            and self.pretrained.kind == "best"
+            and self.pretrained.path is None
+        ):
+            self.pretrained.kind = "path"
+            self.pretrained.path = self.pretrained_checkpoint
+        if self.pretrained.kind == "best":
+            if self.pretrained.algorithm is None:
+                self.pretrained.algorithm = "simclr"
+            if self.pretrained.dataset is None:
+                self.pretrained.dataset = self.data.dataset
+        return self
 
     @classmethod
     def from_toml(cls, path: str | Path) -> FinetuneConfig:

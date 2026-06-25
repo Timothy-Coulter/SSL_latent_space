@@ -15,29 +15,31 @@ lr = 0.001
 weight_decay = 0.0001
 
 [data]
-dataset = "fake"
-batch_size = 32
-num_workers = 0
-image_size = 32
+dataset = "stl10"
+split = "unlabeled"
+root = "datasets/data"
+download = false
+batch_size = 256
+num_workers = 8
 
 [loop]
-epochs = 1
-steps_per_epoch = 2
+epochs = 100
 seed = 0
-device = "cpu"
-log_every_n_steps = 1
+device = "cuda"
+log_every_n_steps = 50
+verbose = 1
 
 [early_stopping]
-enabled = false
-patience = 2
+enabled = true
+patience = 10
 min_delta = 0.0
 
 [checkpoint]
-save_best = false
-save_final = false
+save_best = true
+save_final = true
 
 [logging]
-enabled = false
-experiment = "smoke"
+enabled = true
+experiment = "vicreg_stl10"
 results_dir = "results"
 tensorboard_dir = "runs"

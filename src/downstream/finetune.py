@@ -50,19 +50,67 @@ def _accuracy(logits: torch.Tensor, targets: torch.Tensor) -> float:
     return float((preds == targets).float().mean().detach().cpu().item())
 
 
+def _resolve_best_pretrained_checkpoint(cfg: FinetuneConfig) -> Path:
+    pretrained = cfg.pretrained
+    if pretrained.algorithm is None or pretrained.dataset is None:
+        raise ValueError(
+            "pretrained.algorithm and pretrained.dataset are required when kind='best'."
+        )
+
+    experiment = pretrained.experiment or f"{pretrained.algorithm}_{pretrained.dataset}"
+    base = Path(pretrained.results_dir) / experiment
+    if not base.exists():
+        raise FileNotFoundError(f"No pretraining results dir found at: {base}")
+
+    # Run dirs are created as: <algorithm>-YYYYmmdd-HHMMSS
+    prefix = f"{pretrained.algorithm}-"
+    candidates = sorted([p for p in base.iterdir() if p.is_dir() and p.name.startswith(prefix)])
+    if not candidates:
+        raise FileNotFoundError(f"No pretraining runs found under: {base}")
+
+    run_dir = candidates[-1]
+    ckpt_dir = run_dir / "checkpoints"
+    ckpt_name = "best.pt" if pretrained.checkpoint == "best" else "final.pt"
+    ckpt_path = ckpt_dir / ckpt_name
+    if ckpt_path.exists():
+        return ckpt_path
+
+    # Fallback: use final.pt if best.pt is missing.
+    fallback = ckpt_dir / "final.pt"
+    if fallback.exists():
+        return fallback
+    raise FileNotFoundError(f"No checkpoint found under: {ckpt_dir}")
+
+
+def _resolve_pretrained_checkpoint(cfg: FinetuneConfig) -> Path | None:
+    pretrained = cfg.pretrained
+    if pretrained.kind == "none":
+        return None
+    if pretrained.kind == "path":
+        if not pretrained.path:
+            raise ValueError("pretrained.path is required when kind='path'.")
+        return Path(pretrained.path)
+    return _resolve_best_pretrained_checkpoint(cfg)
+
+
 def _build_model(cfg: FinetuneConfig, *, device: torch.device) -> nn.Module:
-    ckpt = torch.load(cfg.pretrained_checkpoint, map_location="cpu")
-    if "backbone_state_dict" in ckpt:
-        backbone_state = ckpt["backbone_state_dict"]
-        feature_dim = int(ckpt["model"]["feature_dim"])
-        backbone = make_backbone("simple_cnn", feature_dim=feature_dim)
-        backbone.load_state_dict(backbone_state, strict=False)
+    ckpt_path = _resolve_pretrained_checkpoint(cfg)
+    if ckpt_path is None:
+        feature_dim = int(cfg.feature_dim)
+        backbone = make_backbone(cfg.backbone, feature_dim=feature_dim)
     else:
-        ssl_cfg = TrainingConfig.model_validate(ckpt["cfg"])
-        algo = build_algorithm(ssl_cfg.model, ssl_cfg.algorithm)
-        load_algorithm_state_dict(algo, ckpt["algo_state"])
-        backbone = get_backbone(algo)
-        feature_dim = int(ssl_cfg.model.feature_dim)
+        ckpt = torch.load(ckpt_path, map_location="cpu")
+        if "backbone_state_dict" in ckpt:
+            backbone_state = ckpt["backbone_state_dict"]
+            feature_dim = int(ckpt["model"]["feature_dim"])
+            backbone = make_backbone("simple_cnn", feature_dim=feature_dim)
+            backbone.load_state_dict(backbone_state, strict=False)
+        else:
+            ssl_cfg = TrainingConfig.model_validate(ckpt["cfg"])
+            algo = build_algorithm(ssl_cfg.model, ssl_cfg.algorithm)
+            load_algorithm_state_dict(algo, ckpt["algo_state"])
+            backbone = get_backbone(algo)
+            feature_dim = int(ssl_cfg.model.feature_dim)
 
     head = nn.Linear(feature_dim, cfg.num_classes)
     return nn.Sequential(backbone, head).to(device)

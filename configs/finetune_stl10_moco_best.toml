@@ -2,18 +2,18 @@ num_classes = 10
 
 [pretrained]
 kind = "best"
-algorithm = "simclr"
-dataset = "cifar10"
+algorithm = "moco"
+dataset = "stl10"
 checkpoint = "best"
 results_dir = "results"
 
 [data]
-dataset = "cifar10"
+dataset = "stl10"
 root = "datasets/data"
 download = false
 batch_size = 128
 num_workers = 4
-image_size = 32
+image_size = 96
 
 [loop]
 epochs = 20
@@ -31,7 +31,7 @@ weight_decay = 0.0001
 
 [logging]
 enabled = true
-experiment = "finetune_cifar10_simclr_best"
+experiment = "finetune_stl10_moco_best"
 results_dir = "results"
 tensorboard_dir = "runs"
 save_best_checkpoint = true

@@ -1,14 +1,12 @@
-num_classes = 10
+num_classes = 100
+backbone = "simple_cnn"
+feature_dim = 128
 
 [pretrained]
-kind = "best"
-algorithm = "simclr"
-dataset = "cifar10"
-checkpoint = "best"
-results_dir = "results"
+kind = "none"
 
 [data]
-dataset = "cifar10"
+dataset = "cifar100"
 root = "datasets/data"
 download = false
 batch_size = 128
@@ -31,7 +29,7 @@ weight_decay = 0.0001
 
 [logging]
 enabled = true
-experiment = "finetune_cifar10_simclr_best"
+experiment = "finetune_cifar100_scratch"
 results_dir = "results"
 tensorboard_dir = "runs"
 save_best_checkpoint = true
