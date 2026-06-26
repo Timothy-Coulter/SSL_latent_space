@@ -53,6 +53,6 @@ results_dir = "results"
 tensorboard_dir = "runs"
 
 [post_pretrain_finetune]
-enabled = false
+enabled = true
 finetune_config = "configs/defaults/finetune_stl10.toml"
 checkpoint = "best"

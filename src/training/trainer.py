@@ -267,6 +267,6 @@ def train_from_config(  # noqa: C901
         finetune_cfg.num_classes = _DATASET_NUM_CLASSES[dataset_name]
         finetune_cfg.logging.results_dir = str(run_dir)
         finetune_cfg.logging.experiment = f"finetune_{cfg.algorithm.name}_{dataset_name}"
-        finetune_cfg.logging.tensorboard_dir = str(run_dir / "tensorboard")
+        finetune_cfg.logging.tensorboard_dir = "runs"
         finetune_from_config(finetune_cfg, config_path=None)
     return run_dir
