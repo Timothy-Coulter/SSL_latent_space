@@ -17,6 +17,13 @@ from src.loader import get_classification_dataset
 from src.training.algorithms import build_algorithm, get_backbone, load_algorithm_state_dict
 from src.training.config import TrainingConfig
 from src.training.models import make_backbone
+from src.training.schedulers import (
+    build_scheduler,
+    current_lr,
+    is_reduce_on_plateau,
+    step_scheduler_batch,
+    step_scheduler_epoch,
+)
 
 from .config import FinetuneConfig
 
@@ -179,7 +186,9 @@ def _write_run_artifacts(
     (run_dir / "config.json").write_text(cfg.model_dump_json(indent=2), encoding="utf-8")
 
 
-def finetune_from_config(cfg: FinetuneConfig, *, config_path: str | Path | None = None) -> Path:
+def finetune_from_config(  # noqa: C901
+    cfg: FinetuneConfig, *, config_path: str | Path | None = None
+) -> Path:
     """Run fine-tuning and return the run directory."""
     device = _resolve_device(cfg.loop.device)
     torch.manual_seed(cfg.loop.seed)
@@ -194,6 +203,12 @@ def finetune_from_config(cfg: FinetuneConfig, *, config_path: str | Path | None 
     writer = _maybe_writer(cfg, _tb_dir(cfg, stamp=stamp))
 
     opt = AdamW(model.parameters(), lr=cfg.optim.lr, weight_decay=cfg.optim.weight_decay)
+    scheduler = build_scheduler(
+        opt,
+        cfg=cfg.scheduler,
+        total_epochs=cfg.loop.epochs,
+        steps_per_epoch=max(1, len(train_loader)),
+    )
     loss_fn = nn.CrossEntropyLoss()
 
     best_acc: float | None = None
@@ -206,6 +221,8 @@ def finetune_from_config(cfg: FinetuneConfig, *, config_path: str | Path | None 
     try:
         for epoch in range(cfg.loop.epochs):
             model.train(True)
+            epoch_loss_sum = 0.0
+            epoch_steps = 0
             for step, (x, y) in enumerate(train_loader):
                 x = x.to(device, non_blocking=True)
                 y = y.to(device, non_blocking=True)
@@ -214,20 +231,38 @@ def finetune_from_config(cfg: FinetuneConfig, *, config_path: str | Path | None 
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
                 opt.step()
+                if cfg.scheduler.interval == "step":
+                    step_scheduler_batch(scheduler)
+
+                loss_value = float(loss.detach().cpu().item())
+                epoch_loss_sum += loss_value
+                epoch_steps += 1
 
                 if cfg.loop.verbose >= 1 and global_step % cfg.loop.log_every_n_steps == 0:
                     print(
                         f"[finetune] epoch={epoch + 1}/{cfg.loop.epochs} "
-                        f"step={step + 1} loss={float(loss.detach().cpu().item()):.6f}"
+                        f"step={step + 1} loss={loss_value:.6f}"
                     )
                 if writer is not None and global_step % cfg.loop.log_every_n_steps == 0:
-                    writer.add_scalar("train/loss", float(loss.detach().cpu().item()), global_step)
+                    writer.add_scalar("train/loss", loss_value, global_step)
+                    writer.add_scalar("train/lr", current_lr(opt), global_step)
                 global_step += 1
 
+            epoch_train_loss = epoch_loss_sum / max(1, epoch_steps)
             test_acc = _eval_accuracy(model, test_loader, device=device)
             final_acc = test_acc
             if writer is not None:
                 writer.add_scalar("eval/acc", test_acc, epoch)
+                writer.add_scalar("train/epoch_loss", epoch_train_loss, epoch)
+
+            if scheduler is not None and cfg.scheduler.interval == "epoch":
+                if is_reduce_on_plateau(scheduler):
+                    if cfg.scheduler.monitor == "eval/acc":
+                        step_scheduler_epoch(scheduler, metric=test_acc)
+                    else:
+                        step_scheduler_epoch(scheduler, metric=epoch_train_loss)
+                else:
+                    step_scheduler_epoch(scheduler)
 
             improved = best_acc is None or (test_acc - best_acc) > cfg.loop.early_stopping_min_delta
             if improved:

@@ -335,28 +335,15 @@ class BYOL(SSLStep):
     ) -> torch.Tensor:
         """Compute the symmetric BYOL loss."""
         # Online network
-        p1 = self.predictor(
-            self.online_projector(
-                self.online_backbone(x1)
-            )
-        )
+        p1 = self.predictor(self.online_projector(self.online_backbone(x1)))
 
-        p2 = self.predictor(
-            self.online_projector(
-                self.online_backbone(x2)
-            )
-        )
+        p2 = self.predictor(self.online_projector(self.online_backbone(x2)))
 
         # Target network (no gradients)
         with torch.no_grad():
+            z1 = self.target_projector(self.target_backbone(x1))
 
-            z1 = self.target_projector(
-                self.target_backbone(x1)
-            )
-
-            z2 = self.target_projector(
-                self.target_backbone(x2)
-            )
+            z2 = self.target_projector(self.target_backbone(x2))
 
         #
         # Normalize

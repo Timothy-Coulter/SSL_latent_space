@@ -8,12 +8,20 @@ from collections.abc import Iterable
 from pathlib import Path
 
 import torch
-from torch.optim import AdamW
+from torch.optim import AdamW, Optimizer
 from torch.utils.tensorboard import SummaryWriter
 
 from .algorithms import SSLStep, algorithm_state_dict, build_algorithm
 from .config import TrainingConfig
 from .datasets import build_ssl_dataloader
+from .schedulers import (
+    SchedulerT,
+    build_scheduler,
+    current_lr,
+    is_reduce_on_plateau,
+    step_scheduler_batch,
+    step_scheduler_epoch,
+)
 
 
 def _resolve_device(device_str: str) -> torch.device:
@@ -62,7 +70,8 @@ def _train_one_epoch(
     *,
     cfg: TrainingConfig,
     algo: SSLStep,
-    opt: AdamW,
+    opt: Optimizer,
+    scheduler: SchedulerT | None,
     loader: Iterable[tuple[torch.Tensor, torch.Tensor]],
     device: torch.device,
     writer: SummaryWriter | None,
@@ -83,6 +92,8 @@ def _train_one_epoch(
         opt.zero_grad(set_to_none=True)
         loss.backward()
         opt.step()
+        if cfg.scheduler.interval == "step":
+            step_scheduler_batch(scheduler)
 
         loss_value = float(loss.detach().cpu().item())
         epoch_loss_sum += loss_value
@@ -98,6 +109,7 @@ def _train_one_epoch(
             )
         if should_log:
             _maybe_add_scalar(writer, "train/loss", loss_value, global_step)
+            _maybe_add_scalar(writer, "train/lr", current_lr(opt), global_step)
         global_step += 1
 
     epoch_loss = epoch_loss_sum / max(1, epoch_steps)
@@ -121,7 +133,9 @@ def _update_early_stopping(
     return False, best_epoch_loss, epochs_since_improve + 1
 
 
-def train_from_config(cfg: TrainingConfig, *, config_path: str | Path | None = None) -> Path:
+def train_from_config(  # noqa: C901
+    cfg: TrainingConfig, *, config_path: str | Path | None = None
+) -> Path:
     """Run a training job and return the created run directory."""
     device = _resolve_device(cfg.loop.device)
     torch.manual_seed(cfg.loop.seed)
@@ -132,6 +146,12 @@ def train_from_config(cfg: TrainingConfig, *, config_path: str | Path | None = N
     algo: SSLStep = build_algorithm(cfg.model, cfg.algorithm)
     algo.to(device).train(True)
     opt = AdamW(algo.parameters(), lr=cfg.optim.lr, weight_decay=cfg.optim.weight_decay)
+    scheduler = build_scheduler(
+        opt,
+        cfg=cfg.scheduler,
+        total_epochs=cfg.loop.epochs,
+        steps_per_epoch=steps_per_epoch,
+    )
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     run_dir = (
@@ -157,6 +177,7 @@ def train_from_config(cfg: TrainingConfig, *, config_path: str | Path | None = N
                 cfg=cfg,
                 algo=algo,
                 opt=opt,
+                scheduler=scheduler,
                 loader=data.loader,
                 device=device,
                 writer=writer,
@@ -174,6 +195,15 @@ def train_from_config(cfg: TrainingConfig, *, config_path: str | Path | None = N
 
             if improved and cfg.checkpoint.save_best:
                 _save_checkpoint(run_dir, "best.pt", cfg=cfg, algo=algo, epoch=epoch)
+
+            if scheduler is not None and cfg.scheduler.interval == "epoch":
+                if is_reduce_on_plateau(scheduler):
+                    metric = epoch_loss
+                    if cfg.scheduler.monitor == "train/loss":
+                        metric = epoch_loss
+                    step_scheduler_epoch(scheduler, metric=metric)
+                else:
+                    step_scheduler_epoch(scheduler)
 
             if cfg.early_stopping.enabled and epochs_since_improve > cfg.early_stopping.patience:
                 if cfg.loop.verbose >= 1:

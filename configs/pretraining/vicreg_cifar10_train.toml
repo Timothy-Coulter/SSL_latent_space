@@ -39,6 +39,12 @@ min_delta = 0.0
 save_best = true
 save_final = true
 
+[scheduler]
+name = "cosine"
+interval = "epoch"
+t_max = 100
+eta_min = 0.0
+
 [logging]
 enabled = true
 experiment = "vicreg_cifar10"

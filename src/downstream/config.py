@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.training.config import AlgorithmName
+from src.training.config import AlgorithmName, SchedulerConfig
 
 DownstreamDatasetName = Literal["cifar10", "cifar100", "stl10"]
 
@@ -91,6 +91,7 @@ class FinetuneConfig(BaseModel):
     data: DownstreamDataConfig = Field(default_factory=DownstreamDataConfig)
     loop: DownstreamLoopConfig = Field(default_factory=DownstreamLoopConfig)
     optim: DownstreamOptimConfig = Field(default_factory=DownstreamOptimConfig)
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     logging: DownstreamLoggingConfig = Field(default_factory=DownstreamLoggingConfig)
 
     @model_validator(mode="after")

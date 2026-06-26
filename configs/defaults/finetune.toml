@@ -27,10 +27,15 @@ early_stopping_min_delta = 0.0
 lr = 0.001
 weight_decay = 0.0001
 
+[scheduler]
+name = "cosine"
+interval = "epoch"
+t_max = 20
+eta_min = 0.0
+
 [logging]
 enabled = true
 experiment = "finetune_default"
 results_dir = "results"
 tensorboard_dir = "runs"
 save_best_checkpoint = true
-

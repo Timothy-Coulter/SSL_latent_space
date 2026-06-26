@@ -12,6 +12,23 @@ from pydantic import BaseModel, Field
 
 AlgorithmName = Literal["simclr", "moco", "byol", "swav", "vicreg"]
 DatasetName = Literal["cifar10", "cifar100", "stl10", "fake"]
+SchedulerName = Literal[
+    "none",
+    "step",
+    "multistep",
+    "exponential",
+    "cosine",
+    "cosine_warm_restarts",
+    "linear",
+    "polynomial",
+    "onecycle",
+    "reduce_on_plateau",
+    "warmup_cosine",
+    "warmup_linear",
+    "constant",
+]
+SchedulerInterval = Literal["epoch", "step"]
+SchedulerMode = Literal["min", "max"]
 
 
 class OptimConfig(BaseModel):
@@ -19,6 +36,45 @@ class OptimConfig(BaseModel):
 
     lr: float = Field(1e-3, gt=0)
     weight_decay: float = Field(1e-4, ge=0)
+
+
+class SchedulerConfig(BaseModel):
+    """Learning-rate scheduler configuration."""
+
+    name: SchedulerName = "none"
+    interval: SchedulerInterval = "epoch"
+    mode: SchedulerMode = "min"
+    monitor: str = "train/epoch_loss"
+
+    # Common decay schedulers.
+    step_size: int = Field(10, gt=0)
+    gamma: float = Field(0.1, gt=0)
+    milestones: list[int] = Field(default_factory=lambda: [30, 60, 90])
+
+    # Cosine and polynomial/linear schedules.
+    t_max: int | None = Field(None, gt=0)
+    t_0: int = Field(10, gt=0)
+    t_mult: int = Field(1, gt=0)
+    eta_min: float = Field(0.0, ge=0)
+    power: float = Field(1.0, gt=0)
+
+    # Warmup schedules.
+    warmup_steps: int = Field(100, gt=0)
+    warmup_ratio: float = Field(0.1, gt=0, le=1)
+
+    # OneCycle settings.
+    max_lr: float | None = Field(None, gt=0)
+    pct_start: float = Field(0.3, gt=0, lt=1)
+    div_factor: float = Field(25.0, gt=1)
+    final_div_factor: float = Field(1e4, gt=1)
+    total_steps: int | None = Field(None, gt=0)
+
+    # ReduceLROnPlateau settings.
+    factor: float = Field(0.1, gt=0, lt=1)
+    patience: int = Field(10, ge=0)
+    threshold: float = Field(1e-4, ge=0)
+    cooldown: int = Field(0, ge=0)
+    min_lr: float = Field(0.0, ge=0)
 
 
 class DataConfig(BaseModel):
@@ -108,6 +164,7 @@ class TrainingConfig(BaseModel):
     algorithm: AlgorithmConfig = Field(default_factory=AlgorithmConfig)
     model: ModelConfig = Field(default_factory=ModelConfig)
     optim: OptimConfig = Field(default_factory=OptimConfig)
+    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     data: DataConfig = Field(default_factory=DataConfig)
     loop: TrainLoopConfig = Field(default_factory=TrainLoopConfig)
     early_stopping: EarlyStoppingConfig = Field(default_factory=EarlyStoppingConfig)
