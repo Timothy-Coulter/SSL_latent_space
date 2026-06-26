@@ -1,0 +1,24 @@
+model_config = "../defaults/model.toml"
+
+[algorithm]
+name = "vicreg"
+vicreg_invariance_weight = 25.0
+vicreg_variance_weight = 25.0
+vicreg_covariance_weight = 1.0
+
+[data]
+dataset = "fake"
+batch_size = 64
+num_workers = 0
+image_size = 32
+
+[loop]
+epochs = 1
+steps_per_epoch = 1
+device = "cpu"
+log_every_n_steps = 1
+verbose = 1
+
+[logging]
+enabled = false
+

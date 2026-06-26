@@ -121,6 +121,25 @@ class TrainingConfig(BaseModel):
         raw = tomllib.loads(config_path.read_text(encoding="utf-8"))
         if not isinstance(raw, dict):
             raise TypeError("TOML root must be a table.")
+
+        model_config_path = raw.get("model_config")
+        if model_config_path is not None:
+            raw.pop("model_config", None)
+            if not isinstance(model_config_path, str):
+                raise TypeError("model_config must be a string path.")
+            include_path = (config_path.parent / model_config_path).resolve()
+            included = tomllib.loads(include_path.read_text(encoding="utf-8"))
+            if not isinstance(included, dict):
+                raise TypeError("Included model_config TOML root must be a table.")
+            included_model = included.get("model")
+            if included_model is None:
+                raise ValueError(f"Included model_config file has no [model] table: {include_path}")
+            if not isinstance(included_model, dict):
+                raise TypeError("Included [model] table must be a table.")
+            raw_model = raw.get("model") or {}
+            if not isinstance(raw_model, dict):
+                raise TypeError("[model] must be a table.")
+            raw["model"] = {**included_model, **raw_model}
         return cls.model_validate(raw)
 
     def to_dict(self) -> dict[str, Any]:

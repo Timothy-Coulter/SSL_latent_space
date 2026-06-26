@@ -1,0 +1,6 @@
+[model]
+backbone = "simple_cnn"
+feature_dim = 128
+hidden_dim = 256
+projection_dim = 128
+

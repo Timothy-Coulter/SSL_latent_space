@@ -29,18 +29,18 @@ Smoke configs (tiny CPU runs):
 
 Training configs (intended for longer runs):
 
-- `configs/simclr_cifar10_train.toml`
-- `configs/moco_cifar10_train.toml`
-- `configs/byol_cifar10_train.toml`
-- `configs/vicreg_cifar10_train.toml`
-- `configs/swav_stl10_train.toml`
+- `configs/pretraining/simclr_cifar10_train.toml`
+- `configs/pretraining/moco_cifar10_train.toml`
+- `configs/pretraining/byol_cifar10_train.toml`
+- `configs/pretraining/vicreg_cifar10_train.toml`
+- `configs/pretraining/swav_stl10_train.toml`
 
 ## 3) Run training
 
 From the repo root:
 
 ```bash
-python -m src.training.cli --config configs/simclr_cifar10_train.toml
+python -m src.training.cli --config configs/pretraining/simclr_cifar10_train.toml
 ```
 
 ### Verbose console logging
@@ -154,7 +154,7 @@ save_best_checkpoint = true
 ### Step 3: Run fine-tuning
 
 ```bash
-python -m src.downstream.cli --config configs/finetune_cifar10_simclr_best.toml
+python -m src.downstream.cli --config configs/finetuning/finetune_cifar10_simclr_best.toml
 ```
 
 ### Fine-tuning outputs

@@ -1,0 +1,24 @@
+model_config = "../defaults/model.toml"
+
+[algorithm]
+name = "moco"
+queue_size = 4096
+momentum = 0.99
+temperature = 0.2
+
+[data]
+dataset = "fake"
+batch_size = 64
+num_workers = 0
+image_size = 32
+
+[loop]
+epochs = 1
+steps_per_epoch = 1
+device = "cpu"
+log_every_n_steps = 1
+verbose = 1
+
+[logging]
+enabled = false
+

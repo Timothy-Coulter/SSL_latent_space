@@ -41,17 +41,32 @@ def _l2_normalize(x: torch.Tensor) -> torch.Tensor:
     return functional.normalize(x, dim=1, eps=1e-6)
 
 
+@torch.no_grad()
+def _momentum_update_module(online: nn.Module, target: nn.Module, *, momentum: float) -> None:
+    """Update target module weights and buffers from an online module."""
+    for online_param, target_param in zip(online.parameters(), target.parameters(), strict=True):
+        target_param.mul_(momentum).add_(online_param, alpha=1.0 - momentum)
+    for online_buffer, target_buffer in zip(online.buffers(), target.buffers(), strict=True):
+        if torch.is_floating_point(target_buffer):
+            target_buffer.mul_(momentum).add_(online_buffer, alpha=1.0 - momentum)
+        else:
+            target_buffer.copy_(online_buffer)
+
+
 def nt_xent_loss(z1: torch.Tensor, z2: torch.Tensor, *, temperature: float) -> torch.Tensor:
     """Compute SimCLR-style NT-Xent loss for a batch."""
     if z1.shape != z2.shape:
         raise ValueError("z1 and z2 must have the same shape.")
+    if temperature <= 0:
+        raise ValueError("temperature must be > 0.")
     batch = z1.shape[0]
     if batch < 2:
         raise ValueError("Batch size must be >= 2 for contrastive loss.")
 
     z = torch.cat([_l2_normalize(z1), _l2_normalize(z2)], dim=0)  # (2B, D)
     logits = (z @ z.t()) / temperature
-    logits = logits - torch.diag_embed(torch.diagonal(logits))  # remove self-similarity
+    self_mask = torch.eye(logits.shape[0], dtype=torch.bool, device=logits.device)
+    logits = logits.masked_fill(self_mask, torch.finfo(logits.dtype).min)
 
     targets = torch.arange(batch, device=z.device)
     targets = torch.cat([targets + batch, targets], dim=0)  # positives index
@@ -128,7 +143,7 @@ class MoCo(SSLStep):
             p.requires_grad_(False)
         for p in target_projector.parameters():
             p.requires_grad_(False)
-        queue = torch.zeros(algo.queue_size, model.projection_dim)
+        queue = _l2_normalize(torch.randn(algo.queue_size, model.projection_dim))
         queue_ptr = torch.zeros((), dtype=torch.long)
         return cls(
             online_backbone=online_backbone,
@@ -165,14 +180,10 @@ class MoCo(SSLStep):
 
     @torch.no_grad()
     def _ema_update(self) -> None:
-        for online, target in zip(
-            self.online_backbone.parameters(), self.target_backbone.parameters(), strict=True
-        ):
-            target.data.mul_(self.momentum).add_(online.data, alpha=1.0 - self.momentum)
-        for online, target in zip(
-            self.online_projector.parameters(), self.target_projector.parameters(), strict=True
-        ):
-            target.data.mul_(self.momentum).add_(online.data, alpha=1.0 - self.momentum)
+        _momentum_update_module(self.online_backbone, self.target_backbone, momentum=self.momentum)
+        _momentum_update_module(
+            self.online_projector, self.target_projector, momentum=self.momentum
+        )
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys: torch.Tensor) -> None:
@@ -216,31 +227,46 @@ class MoCo(SSLStep):
 
 @dataclass
 class BYOL(SSLStep):
-    """BYOL: online/target networks + predictor with EMA update."""
+    """Bootstrap Your Own Latent (BYOL)."""
 
     online_backbone: nn.Module
     online_projector: nn.Module
     predictor: nn.Module
+
     target_backbone: nn.Module
     target_projector: nn.Module
+
     tau: float
 
     @classmethod
     def build(cls, model: ModelConfig, algo: AlgorithmConfig) -> BYOL:
-        """Construct an algorithm instance from configs."""
-        online_backbone = make_backbone(model.backbone, feature_dim=model.feature_dim)
+        """Construct a BYOL model."""
+        online_backbone = make_backbone(
+            model.backbone,
+            feature_dim=model.feature_dim,
+        )
+
         online_projector = MLP(
-            in_dim=model.feature_dim, hidden_dim=model.hidden_dim, out_dim=model.projection_dim
+            in_dim=model.feature_dim,
+            hidden_dim=model.hidden_dim,
+            out_dim=model.projection_dim,
         )
+
         predictor = MLP(
-            in_dim=model.projection_dim, hidden_dim=model.hidden_dim, out_dim=model.projection_dim
+            in_dim=model.projection_dim,
+            hidden_dim=model.hidden_dim,
+            out_dim=model.projection_dim,
         )
+
         target_backbone = copy_model(online_backbone)
         target_projector = copy_model(online_projector)
+
         for p in target_backbone.parameters():
             p.requires_grad_(False)
+
         for p in target_projector.parameters():
             p.requires_grad_(False)
+
         return cls(
             online_backbone=online_backbone,
             online_projector=online_projector,
@@ -251,7 +277,7 @@ class BYOL(SSLStep):
         )
 
     def parameters(self) -> list[nn.Parameter]:
-        """Return trainable parameters (online + predictor)."""
+        """Return trainable parameters."""
         return (
             list(self.online_backbone.parameters())
             + list(self.online_projector.parameters())
@@ -259,52 +285,94 @@ class BYOL(SSLStep):
         )
 
     def train(self, mode: bool = True) -> BYOL:
-        """Set training mode for modules."""
+        """Set module training mode."""
         self.online_backbone.train(mode)
         self.online_projector.train(mode)
         self.predictor.train(mode)
-        self.target_backbone.train(False)
-        self.target_projector.train(False)
+
+        #
+        # Keep the target encoder in train mode so BatchNorm layers
+        # use batch statistics. Gradients remain disabled.
+        #
+        self.target_backbone.train(mode)
+        self.target_projector.train(mode)
+
         return self
 
+    def eval(self) -> BYOL:
+        """."""
+        return self.train(False)
+
     def to(self, device: torch.device) -> BYOL:
-        """Move modules to the requested device."""
+        """Move all modules to a device."""
         self.online_backbone.to(device)
         self.online_projector.to(device)
         self.predictor.to(device)
+
         self.target_backbone.to(device)
         self.target_projector.to(device)
+
         return self
 
     @torch.no_grad()
-    def _ema_update(self) -> None:
-        for online, target in zip(
-            self.online_backbone.parameters(), self.target_backbone.parameters(), strict=True
-        ):
-            target.data.mul_(self.tau).add_(online.data, alpha=1.0 - self.tau)
-        for online, target in zip(
-            self.online_projector.parameters(), self.target_projector.parameters(), strict=True
-        ):
-            target.data.mul_(self.tau).add_(online.data, alpha=1.0 - self.tau)
+    def ema_update(self) -> None:
+        """Update target encoder using exponential moving average."""
+        _momentum_update_module(
+            self.online_backbone,
+            self.target_backbone,
+            momentum=self.tau,
+        )
+        _momentum_update_module(
+            self.online_projector,
+            self.target_projector,
+            momentum=self.tau,
+        )
 
-    def step(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
-        """Compute loss for a batch and update target networks."""
-        p1 = self.predictor(self.online_projector(self.online_backbone(x1)))
-        p2 = self.predictor(self.online_projector(self.online_backbone(x2)))
+    def step(
+        self,
+        x1: torch.Tensor,
+        x2: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute the symmetric BYOL loss."""
+        # Online network
+        p1 = self.predictor(
+            self.online_projector(
+                self.online_backbone(x1)
+            )
+        )
 
+        p2 = self.predictor(
+            self.online_projector(
+                self.online_backbone(x2)
+            )
+        )
+
+        # Target network (no gradients)
         with torch.no_grad():
-            self._ema_update()
-            z1 = self.target_projector(self.target_backbone(x1))
-            z2 = self.target_projector(self.target_backbone(x2))
 
+            z1 = self.target_projector(
+                self.target_backbone(x1)
+            )
+
+            z2 = self.target_projector(
+                self.target_backbone(x2)
+            )
+
+        #
+        # Normalize
+        #
         p1 = _l2_normalize(p1)
         p2 = _l2_normalize(p2)
         z1 = _l2_normalize(z1)
         z2 = _l2_normalize(z2)
 
-        loss = 2 - 2 * (p1 * z2).sum(dim=1).mean()
-        loss = loss + (2 - 2 * (p2 * z1).sum(dim=1).mean())
-        return loss * 0.5
+        #
+        # Symmetric cosine loss
+        #
+        loss12 = 2.0 - 2.0 * (p1 * z2).sum(dim=1).mean()
+        loss21 = 2.0 - 2.0 * (p2 * z1).sum(dim=1).mean()
+
+        return 0.5 * (loss12 + loss21)
 
 
 @dataclass
@@ -353,8 +421,13 @@ class SwAV(SSLStep):
         self.prototypes.to(device)
         return self
 
+    @torch.no_grad()
+    def _normalize_prototypes(self) -> None:
+        self.prototypes.weight.copy_(_l2_normalize(self.prototypes.weight))
+
     def step(self, x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         """Compute the prototype assignment consistency loss."""
+        self._normalize_prototypes()
         z1 = _l2_normalize(self.projector(self.backbone(x1)))
         z2 = _l2_normalize(self.projector(self.backbone(x2)))
 
@@ -415,6 +488,10 @@ class VICReg(SSLStep):
         """Compute the VICReg loss."""
         z1 = self.projector(self.backbone(x1))
         z2 = self.projector(self.backbone(x2))
+        if z1.shape != z2.shape:
+            raise ValueError("z1 and z2 must have the same shape.")
+        if z1.shape[0] < 2:
+            raise ValueError("Batch size must be >= 2 for VICReg.")
 
         repr_loss = functional.mse_loss(z1, z2)
         std_z1 = torch.sqrt(z1.var(dim=0) + 1e-4)
