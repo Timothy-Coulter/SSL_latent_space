@@ -49,3 +49,8 @@ enabled = true
 experiment = "byol_stl10"
 results_dir = "results"
 tensorboard_dir = "runs"
+
+[post_pretrain_finetune]
+enabled = false
+finetune_config = "configs/defaults/finetune_stl10.toml"
+checkpoint = "best"

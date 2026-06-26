@@ -27,3 +27,8 @@ eta_min = 0.0
 
 [logging]
 enabled = false
+
+[post_pretrain_finetune]
+enabled = false
+finetune_config = "configs/defaults/finetune.toml"
+checkpoint = "best"

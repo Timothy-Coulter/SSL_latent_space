@@ -158,6 +158,14 @@ class LoggingConfig(BaseModel):
     tensorboard_dir: str = "runs"
 
 
+class PostPretrainFinetuneConfig(BaseModel):
+    """Optional post-pretraining downstream fine-tuning settings."""
+
+    enabled: bool = False
+    finetune_config: str = "configs/defaults/finetune.toml"
+    checkpoint: Literal["best", "final"] = "best"
+
+
 class TrainingConfig(BaseModel):
     """Top-level training configuration."""
 
@@ -170,6 +178,9 @@ class TrainingConfig(BaseModel):
     early_stopping: EarlyStoppingConfig = Field(default_factory=EarlyStoppingConfig)
     checkpoint: CheckpointConfig = Field(default_factory=CheckpointConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    post_pretrain_finetune: PostPretrainFinetuneConfig = Field(
+        default_factory=PostPretrainFinetuneConfig
+    )
 
     @classmethod
     def from_toml(cls, path: str | Path) -> TrainingConfig:

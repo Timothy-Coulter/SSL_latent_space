@@ -1,0 +1,41 @@
+num_classes = 10
+backbone = "simple_cnn"
+feature_dim = 128
+
+[pretrained]
+kind = "none"
+
+[data]
+dataset = "stl10"
+root = "datasets/data"
+download = false
+batch_size = 128
+num_workers = 4
+image_size = 96
+
+[loop]
+epochs = 20
+seed = 0
+device = "cuda"
+log_every_n_steps = 50
+verbose = 1
+early_stopping_enabled = true
+early_stopping_patience = 5
+early_stopping_min_delta = 0.0
+
+[optim]
+lr = 0.001
+weight_decay = 0.0001
+
+[scheduler]
+name = "cosine"
+interval = "epoch"
+t_max = 20
+eta_min = 0.0
+
+[logging]
+enabled = true
+experiment = "finetune_stl10"
+results_dir = "results"
+tensorboard_dir = "runs"
+save_best_checkpoint = true

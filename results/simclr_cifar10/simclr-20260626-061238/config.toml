@@ -37,8 +37,19 @@ min_delta = 0.0
 save_best = true
 save_final = true
 
+[scheduler]
+name = "cosine"
+interval = "epoch"
+t_max = 100
+eta_min = 0.0
+
 [logging]
 enabled = true
 experiment = "simclr_cifar10"
 results_dir = "results"
 tensorboard_dir = "runs"
+
+[post_pretrain_finetune]
+enabled = true
+finetune_config = "configs/defaults/finetune_cifar10.toml"
+checkpoint = "best"

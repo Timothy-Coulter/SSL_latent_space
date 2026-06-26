@@ -48,3 +48,8 @@ enabled = true
 experiment = "simclr_cifar100"
 results_dir = "results"
 tensorboard_dir = "runs"
+
+[post_pretrain_finetune]
+enabled = false
+finetune_config = "configs/defaults/finetune_cifar100.toml"
+checkpoint = "best"

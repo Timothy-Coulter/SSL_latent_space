@@ -48,3 +48,8 @@ enabled = true
 experiment = "byol_cifar10"
 results_dir = "results"
 tensorboard_dir = "runs"
+
+[post_pretrain_finetune]
+enabled = false
+finetune_config = "configs/defaults/finetune_cifar10.toml"
+checkpoint = "best"

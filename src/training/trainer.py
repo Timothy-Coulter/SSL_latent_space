@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal, cast
 
 import torch
 from torch.optim import AdamW, Optimizer
@@ -22,6 +24,9 @@ from .schedulers import (
     step_scheduler_batch,
     step_scheduler_epoch,
 )
+
+_DATASET_NUM_CLASSES: dict[str, int] = {"cifar10": 10, "cifar100": 100, "stl10": 10}
+_DATASET_IMAGE_SIZE: dict[str, int] = {"cifar10": 32, "cifar100": 32, "stl10": 96}
 
 
 def _resolve_device(device_str: str) -> torch.device:
@@ -217,6 +222,51 @@ def train_from_config(  # noqa: C901
             writer.flush()
             writer.close()
 
+    final_ckpt_path: Path | None = None
     if cfg.checkpoint.save_final:
-        _save_checkpoint(run_dir, "final.pt", cfg=cfg, algo=algo, epoch=max(0, last_epoch))
+        final_ckpt_path = _save_checkpoint(
+            run_dir, "final.pt", cfg=cfg, algo=algo, epoch=max(0, last_epoch)
+        )
+
+    if cfg.post_pretrain_finetune.enabled:
+        from src.downstream.config import FinetuneConfig
+        from src.downstream.finetune import finetune_from_config
+
+        checkpoints_dir = run_dir / "checkpoints"
+        preferred_name = (
+            "best.pt" if cfg.post_pretrain_finetune.checkpoint == "best" else "final.pt"
+        )
+        source_ckpt = checkpoints_dir / preferred_name
+        if not source_ckpt.exists():
+            fallback = checkpoints_dir / "final.pt"
+            if fallback.exists():
+                source_ckpt = fallback
+            elif final_ckpt_path is not None and final_ckpt_path.exists():
+                source_ckpt = final_ckpt_path
+            else:
+                raise FileNotFoundError(
+                    "Post-pretrain finetune is enabled, but no pretrained checkpoint was found."
+                )
+
+        copied_ckpt = run_dir / "pretrained_for_finetune.pt"
+        shutil.copy2(source_ckpt, copied_ckpt)
+
+        finetune_cfg_path = Path(cfg.post_pretrain_finetune.finetune_config)
+        finetune_cfg = FinetuneConfig.from_toml(finetune_cfg_path)
+        if cfg.data.dataset in ("cifar10", "cifar100", "stl10"):
+            dataset_name = cast(Literal["cifar10", "cifar100", "stl10"], cfg.data.dataset)
+        else:
+            raise ValueError(
+                "Post-pretrain finetune requires a classification dataset "
+                f"(got: {cfg.data.dataset})."
+            )
+        finetune_cfg.pretrained.kind = "path"
+        finetune_cfg.pretrained.path = str(copied_ckpt)
+        finetune_cfg.data.dataset = dataset_name
+        finetune_cfg.data.image_size = _DATASET_IMAGE_SIZE[dataset_name]
+        finetune_cfg.num_classes = _DATASET_NUM_CLASSES[dataset_name]
+        finetune_cfg.logging.results_dir = str(run_dir)
+        finetune_cfg.logging.experiment = f"finetune_{cfg.algorithm.name}_{dataset_name}"
+        finetune_cfg.logging.tensorboard_dir = str(run_dir / "tensorboard")
+        finetune_from_config(finetune_cfg, config_path=None)
     return run_dir
